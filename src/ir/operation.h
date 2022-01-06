@@ -18,33 +18,136 @@
 
 #include <vector>
 
-#include "absl/strings/string_view.h"
 #include "absl/container/flat_hash_map.h"
-#include "src/ir/access_path_v2.h"
-#include "src/ir/data_decl.h"
+#include "src/ir/types/type.h"
+#include "src/ir/value.h"
 
 namespace raksha::ir {
 
-// Description of an operation in the IR.
-class Operation {
+// Signature of an operator. An operator could be simple operators (e.g., `+`,
+// `-`, `sql.select`, `sql.groupby`) or complex operators (e.g., particle,
+// function) that is compose of other operations.
+class Operator {
  public:
-  Operation(std::vector<DataDecl> inputs, std::vector<DataDecl> outputs)
-      : inputs_(std::move(inputs)), outputs_(std::move(outputs)) {}
+  // Declaration of an input or ouptut of the operation.
+  struct DataDecl {
+    std::string name;
+    std::unique_ptr<types::Type> type;
+  };
 
- protected:
-  // Connects an access path to the corresponding input.
-  void AddInput(absl::string_view name, v2::AccessPath access_path);
+  // The type for a collection of `DataDecl` entities.
+  // using DataDeclList = std::vector<DataDecl>;
+  using DataDeclMap =
+      absl::flat_hash_map<std::string, std::unique_ptr<types::Type>>;
 
-  // Connects an output to the corresponding access path.
-  void AddOutput(absl::string_view name, v2::AccessPath access_path);
+  // The implementation of an operator as a collection of operations.
+  class Impl {
+   public:
+    // The type for a collection of `Operation` instances.
+    using OperationList = std::vector<Operation>;
+
+    const OperationList& operations() const { return operations_; }
+    const Operator* parent() const { return parent_; }
+    const NamedValueListMap results() const { return results_; }
+
+   private:
+    friend class OperatorBuilder;
+
+    Impl(const Operator* parent) : parent_(parent) {}
+
+    // The operator for which we are defining the implementation.
+    const Operator* parent_;
+    OperationList operations_;
+    // Maps the outputs of the operator to the corresponding value.
+    // Note that a result can have more than one value which is used
+    // to represent non-determinism.
+    NamedValueListMap results_;
+  };
+
+  const std::string& name() const { return name_; }
+  const DataDeclMap& inputs() const { return inputs_; }
+  const DataDeclMap& outputs() const { return outputs_; }
+  const Impl* impl() const { return impl_.get(); }
 
  private:
-  // Kind kind_; TODO: we should add a kind.
-  // We should also add a visitor for operations.
-  std::vector<DataDecl> inputs_;
-  std::vector<DataDecl> outputs_;
-  absl::flat_hash_map<std::string, std::vector<v2::AccessPath>> inputs_edges_;
-  absl::flat_hash_map<std::string, std::vector<v2::AccessPath>> output_edges_;
+  friend class OperatorBuilder;
+
+  Operator(std::string name) : name_(std::move(name)), impl_(nullptr) {}
+
+  std::string name_;
+  DataDeclMap inputs_;
+  DataDeclMap outputs_;
+  // If the implementation is nullptr, then this is one of the basic operators
+  // like `+`, `-`, etc., that cannot be split up any further.
+  std::unique_ptr<Impl> impl_;
+};
+
+// An Operation represents a unit of execution.
+class Operation {
+ public:
+  Operation(const Operator* op, NamedValueMap inputs)
+      : op_(op), inputs_(std::move(inputs)) {
+    CHECK(op != nullptr);
+    CHECK(op->inputs().size() == inputs_.size());
+  }
+
+  const Operator& op() const { return *op_; }
+
+ private:
+  const Operator* op_;
+  NamedValueMap inputs_;
+};
+
+class OperatorBuilder {
+ public:
+  OperatorBuilder(std::string name)
+      : operator_(new Operator(std::move(name))) {}
+
+  OperatorBuilder& AddInput(std::string name,
+                            std::unique_ptr<types::Type> type) {
+    auto insertion_result =
+        operator_->inputs_.insert({std::move(name), std::move(type)});
+    CHECK(insertion_result.second);
+    return *this;
+  }
+
+  OperatorBuilder& AddOutput(std::string name,
+                             std::unique_ptr<types::Type> type) {
+    auto insertion_result =
+        operator_->outputs_.insert({std::move(name), std::move(type)});
+    CHECK(insertion_result.second);
+    return *this;
+  }
+
+  OperatorBuilder& AddOperation(const Operator* op, NamedValueMap inputs) {
+    GetImpl()->operations_.push_back(Operation(op, std::move(inputs)));
+    return *this;
+  }
+
+  OperatorBuilder& AddImplementation(
+      std::function<void(OperatorBuilder&, Operator*)> builder) {
+    builder(*this, operator_.get());
+    return *this;
+  }
+
+  OperatorBuilder& AddResult(absl::string_view name, Value output) {
+    CHECK(operator_->outputs_.find(name) != operator_->outputs_.end());
+    GetImpl()->results_[name].push_back(output);
+    return *this;
+  }
+
+  std::unique_ptr<Operator> build() { return std::move(operator_); }
+
+ private:
+  Operator::Impl* GetImpl() {
+    if (operator_->impl_ == nullptr) {
+      operator_->impl_ =
+          std::unique_ptr<Operator::Impl>(new Operator::Impl(operator_.get()));
+    }
+    return operator_->impl_.get();
+  }
+
+  std::unique_ptr<Operator> operator_;
 };
 
 }  // namespace raksha::ir

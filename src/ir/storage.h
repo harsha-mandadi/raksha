@@ -16,29 +16,19 @@
 #ifndef SRC_IR_STORAGE_H_
 #define SRC_IR_STORAGE_H_
 
-#include "src/ir/access_path_v2.h"
-#include "src/ir/data_decl.h"
+#include "src/ir/types/type.h"
 
 namespace raksha::ir {
 
+// A class that represents a storage.
 class Storage {
  public:
-  Storage(DataDecl decl): decl_(std::move(decl)) {}
+  Storage(const types::Type* type) : type_(type) {}
 
   // TODO: Delete copy constructor.
-
-  void AddWriteSource(v2::AccessPath access_path) {
-    write_sources_.push_back(access_path);
-  }
-
-  void AddReadTarget(v2::AccessPath access_path) {
-    read_targets_.push_back(access_path);
-  }
-
  private:
-  DataDecl decl_;
-  std::vector<v2::AccessPath> read_targets_;
-  std::vector<v2::AccessPath> write_sources_;
+  const types::Type* type_;
+  // TODO: We will add additional attributes like ttl, medium, etc.
 };
 
 }  // namespace raksha::ir
