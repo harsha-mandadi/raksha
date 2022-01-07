@@ -85,7 +85,7 @@ class Operator {
 // An Operation represents a unit of execution.
 class Operation {
  public:
-  Operation(const Operator* op, NamedValueMap inputs)
+  Operation(const Operator* op, NamedValueListMap inputs)
       : op_(op), inputs_(std::move(inputs)) {
     CHECK(op != nullptr);
     CHECK(op->inputs().size() == inputs_.size());
@@ -95,7 +95,7 @@ class Operation {
 
  private:
   const Operator* op_;
-  NamedValueMap inputs_;
+  NamedValueListMap inputs_;
 };
 
 class OperatorBuilder {
@@ -119,7 +119,7 @@ class OperatorBuilder {
     return *this;
   }
 
-  const Operation* AddOperation(const Operator* op, NamedValueMap inputs) {
+  const Operation* AddOperation(const Operator* op, NamedValueListMap inputs) {
     std::unique_ptr<Operation> operation(new Operation(op, std::move(inputs)));
     const Operation* result = operation.get();
     GetImpl()->operations_.push_back(std::move(operation));

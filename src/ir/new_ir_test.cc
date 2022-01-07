@@ -2,6 +2,7 @@
 #include "src/common/testing/gtest.h"
 #include "src/ir/context.h"
 #include "src/ir/operation.h"
+#include "src/ir/storage.h"
 #include "src/ir/types/primitive_type.h"
 #include "src/ir/value.h"
 
@@ -38,9 +39,20 @@ TEST(NewIrTest, TrySomeStuff) {
           .build());
   ASSERT_NE(make_foo_op, nullptr);
 
+  // Write Storage
+  const Operator* write_op = context.RegisterOperator(
+      OperatorBuilder("core.write")
+          .AddInput("src", std::make_unique<types::PrimitiveType>())
+          .AddInput("tgt", std::make_unique<types::PrimitiveType>())
+          .build());
+  ASSERT_NE(make_foo_op, nullptr);
+
   // Temporary hack to manage Value instances used in value::Field
+  // value::Field should manage the pointers on its own.
   absl::flat_hash_set<Value*> values;
 
+  // particle P1 as an operator
+  //
   // Foo {a, b}
   // Bar {x, y}
   //
@@ -55,11 +67,6 @@ TEST(NewIrTest, TrySomeStuff) {
           .AddOutput("foo", std::make_unique<types::PrimitiveType>())
           .AddImplementation([&values, tag_claim_op, make_foo_op](
                                  OperatorBuilder& builder, Operator* op) {
-            // CONCERNS TO BE ADDRESSED:
-            //  - this is quite verbose
-            //  - SHould an operation also have the outputs explicitly
-            //  specified?
-
             // Create values for bar.x and bar.y
             Value* bar =
                 *(values.insert(new Value(value::OperatorArgument(op, "bar")))
@@ -73,41 +80,51 @@ TEST(NewIrTest, TrySomeStuff) {
             // ir::Predicate instance.
             Value userSelection = Value(value::Predicate());
 
-            // The two versions of foo capturing the fact that foo.a may be
-            // derived from bar.x or bar.y.  It is not ideal that we need to
-            // create two different foo_a objects.  This can cause an
-            // exponential blow up in the number of objects we need to create.
-            // We should come up with a better alternative before we commit.
-            // Perhaps, we should all for multiple inputs to an operation?
-            const Operation* foo1_a = builder.AddOperation(
-                tag_claim_op, {
-                                  {"input", bar_x},
-                                  {"predicate", userSelection},
-                              });
-            const Operation* foo2_a = builder.AddOperation(
-                tag_claim_op, {{"input", bar_y}, {"predicate", userSelection}});
+            // Input of tag claim operation is mapped to both bar.x and bar.y to
+            // reflect the fact that foo.a may get its value from both.  We also
+            // add a "Any()" as an input to indicate that foo.a would also be
+            // created from something other than `bar.x` and `bar.y`.
+            const Operation* foo_a = builder.AddOperation(
+                tag_claim_op,
+                {
+                    {"input", {bar_x, bar_y, Value(value::Any())}},
+                    {"predicate", {userSelection}},
+                });
 
-            // Create `foo`s that takes care of derives from as well as "claim
-            // foo.a is userSelection".
-            const Operation* foo1 = builder.AddOperation(
+            // Create `foo` for the output.
+            const Operation* foo = builder.AddOperation(
                 make_foo_op,
-                {{"a", Value(value::OperationResult(foo1_a, "output"))},
-                 {"b", bar_y}});
-            // foo.a <- bar.y, foo.b <- bar.y
-            const Operation* foo2 = builder.AddOperation(
-                make_foo_op,
-                {{"a", Value(value::OperationResult(foo2_a, "output"))},
-                 {"b", bar_y}});
+                {{"a", {Value(value::OperationResult(foo_a, "output"))}},
+                 {"b", {bar_y}}});
 
-            // Assign the two foos to be the output of this particle.
+            // Assign the foo constructed from these operations to be the
+            // output of this particle.
             builder.AddResult("foo",
-                              Value(value::OperationResult(foo1, "value")));
-            builder.AddResult("foo",
-                              Value(value::OperationResult(foo2, "value")));
+                              Value(value::OperationResult(foo, "value")));
           })
           .build());
 
   ASSERT_NE(particle_p1, nullptr);
+
+  // Instances of particle are represented as operations.
+  auto input_storage =
+      std::make_unique<Storage>(std::make_unique<types::PrimitiveType>());
+  auto output_storage =
+      std::make_unique<Storage>(std::make_unique<types::PrimitiveType>());
+
+  // Recipe R
+  // P1
+  //  bar: reads h1
+  //  foo: writes h2
+  std::unique_ptr<Operation> particle_instance(new Operation(
+      particle_p1, {{"bar", {Value(value::Store(*input_storage))}}}));
+  std::unique_ptr<Operation> write_storage(new Operation(
+      write_op,
+      {{"src", {Value(value::OperationResult(particle_instance.get(), "foo"))}},
+       {"tgt", {Value(value::Store(*output_storage))}}}));
+
+  ASSERT_EQ(particle_instance->op().name(), "arcs.particle.P1");
+  ASSERT_EQ(write_storage->op().name(), "core.write");
 }
 
 }  // namespace raksha::ir

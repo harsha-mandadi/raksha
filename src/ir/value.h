@@ -90,6 +90,9 @@ class Field {
 // Indicates the value in a storage.
 class Store {
  public:
+  Store(const Storage& storage) : storage_(&storage) {}
+
+ private:
   const Storage* storage_;
 };
 
@@ -123,6 +126,8 @@ class Value {
   Value(value::OperationResult arg): value_(std::move(arg)) {}
   Value(value::Field arg): value_(std::move(arg)) {}
   Value(value::Predicate arg) : value_(std::move(arg)) {}
+  Value(value::Any arg) : value_(std::move(arg)) {}
+  Value(value::Store arg) : value_(std::move(arg)) {}
 
  private:
   std::variant<value::OperationResult, value::OperationArgument,

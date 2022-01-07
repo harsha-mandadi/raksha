@@ -23,11 +23,11 @@ namespace raksha::ir {
 // A class that represents a storage.
 class Storage {
  public:
-  Storage(const types::Type* type) : type_(type) {}
+  Storage(std::unique_ptr<types::Type> type) : type_(std::move(type)) {}
 
   // TODO: Delete copy constructor.
  private:
-  const types::Type* type_;
+  std::unique_ptr<types::Type> type_;
   // TODO: We will add additional attributes like ttl, medium, etc.
 };
 
