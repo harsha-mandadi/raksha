@@ -38,9 +38,10 @@ cc_test(
     name = "new_ir_test",
     srcs = ["new_ir_test.cc"],
     deps = [
+        ":ir",
         ":new_ir",
         "//src/common/testing:gtest",
-    ]
+    ],
 )
 
 cc_library(

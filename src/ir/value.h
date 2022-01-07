@@ -36,6 +36,10 @@ namespace value {
 // A value that is an argument to an operation.
 class OperationArgument {
  public:
+  OperationArgument(const Operation* op, std::string name)
+      : operation_(op), operand_name_(name) {}
+
+ private:
   const Operation* operation_;
   std::string operand_name_;
 };
@@ -43,6 +47,10 @@ class OperationArgument {
 // A value that is the result of an operation.
 class OperationResult {
  public:
+  OperationResult(const Operation* op, std::string name)
+      : operation_(op), operand_name_(name) {}
+
+ private:
   const Operation* operation_;
   std::string operand_name_;
 };
@@ -70,7 +78,12 @@ class OperatorResult {
 // A field within another value.
 class Field {
  public:
-  const Value* parent_;
+  Field(Value* parent, std::string field_name)
+      : parent_(parent), field_name_(std::move(field_name)) {}
+
+ private:
+  // TODO: Memory management and copying.
+  Value* parent_;
   std::string field_name_;
 };
 
@@ -81,7 +94,16 @@ class Store {
 };
 
 class Constant {
-  // int, string, predicate, etc.
+  // int, string, etc.
+};
+
+class Predicate {
+ public:
+  Predicate() {}
+
+ private:
+  // TODO: we should store the actual predicate.
+  // std::unique_ptr<ir::Predicate> predicate_;
 };
 
 // A special value to indicate that it can be anything.
@@ -97,11 +119,15 @@ class Value {
   // TODO: make the variable private.
   Value(value::OperatorArgument arg): value_(std::move(arg)) {}
   Value(value::OperatorResult arg): value_(std::move(arg)) {}
+  Value(value::OperationArgument arg): value_(std::move(arg)) {}
+  Value(value::OperationResult arg): value_(std::move(arg)) {}
+  Value(value::Field arg): value_(std::move(arg)) {}
+  Value(value::Predicate arg) : value_(std::move(arg)) {}
 
  private:
   std::variant<value::OperationResult, value::OperationArgument,
                value::OperatorResult, value::OperatorArgument, value::Field,
-               value::Store, value::Constant, value::Any>
+               value::Store, value::Constant, value::Predicate, value::Any>
       value_;
 };
 

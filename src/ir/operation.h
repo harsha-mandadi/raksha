@@ -44,7 +44,7 @@ class Operator {
   class Impl {
    public:
     // The type for a collection of `Operation` instances.
-    using OperationList = std::vector<Operation>;
+    using OperationList = std::vector<std::unique_ptr<Operation>>;
 
     const OperationList& operations() const { return operations_; }
     const Operator* parent() const { return parent_; }
@@ -119,9 +119,11 @@ class OperatorBuilder {
     return *this;
   }
 
-  OperatorBuilder& AddOperation(const Operator* op, NamedValueMap inputs) {
-    GetImpl()->operations_.push_back(Operation(op, std::move(inputs)));
-    return *this;
+  const Operation* AddOperation(const Operator* op, NamedValueMap inputs) {
+    std::unique_ptr<Operation> operation(new Operation(op, std::move(inputs)));
+    const Operation* result = operation.get();
+    GetImpl()->operations_.push_back(std::move(operation));
+    return result;
   }
 
   OperatorBuilder& AddImplementation(
