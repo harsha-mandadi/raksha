@@ -18,7 +18,7 @@
 #include "src/common/testing/gtest.h"
 #include "src/ir/datalog_print_context.h"
 #include "src/xform_to_datalog/authorization_logic_datalog_facts.h"
-#include "src/xform_to_datalog/authorization_logic_test_utils.h"
+#include "src/test_utils/utils.h"
 #include "src/xform_to_datalog/manifest_datalog_facts.h"
 
 namespace raksha::xform_to_datalog {
@@ -54,7 +54,7 @@ INSTANTIATE_TEST_SUITE_P(
     testing::Values(
         std::make_tuple(ManifestDatalogFacts(),
                         *(AuthorizationLogicDatalogFacts::create(
-                            AuthorizationLogicTest::GetTestDataDir(),
+                            raksha::test_utils::GetTestDataDir("src/xform_to_datalog/testdata"),
                             "empty_auth_logic")),
                         R"(// GENERATED FILE, DO NOT EDIT!
 
@@ -101,7 +101,7 @@ grounded_dummy("dummy_var").
         std::make_tuple(ManifestDatalogFacts({ManifestDatalogFacts::Particle(
                             particle_spec.get(), {}, {})}),
                         *(AuthorizationLogicDatalogFacts::create(
-                            AuthorizationLogicTest::GetTestDataDir(),
+                            raksha::test_utils::GetTestDataDir("src/xform_to_datalog/testdata"),
                             "simple_auth_logic")),
                         R"(// GENERATED FILE, DO NOT EDIT!
 
